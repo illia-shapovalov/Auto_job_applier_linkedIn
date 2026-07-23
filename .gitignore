@@ -12,3 +12,8 @@ secrets.py
 config/personals.py
 .venv
 apikeys.py
+
+# Local credentials and API keys
+.env
+.env.*
+!.env.example
