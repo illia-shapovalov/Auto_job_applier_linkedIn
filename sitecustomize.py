@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 TARGET = ROOT / "runAiBot.py"
-MARKER = "# AUTO_JOB_RUNTIME_HOTFIX_V1"
+MARKER = "# AUTO_JOB_ROLE_ROTATION_HOTFIX_V1"
 
 
 def replace_once(text: str, old: str, new: str, description: str) -> str:
@@ -16,13 +16,13 @@ def replace_once(text: str, old: str, new: str, description: str) -> str:
             return text
 
         raise RuntimeError(
-            f"Unable to apply runtime hotfix: {description}. "
-            "The source no longer matches the expected version."
+            f"Unable to apply role-rotation hotfix: {description}. "
+            "The local runAiBot.py no longer matches the expected structure."
         )
 
     if count != 1:
         raise RuntimeError(
-            f"Unable to apply runtime hotfix: {description} matched "
+            f"Unable to apply role-rotation hotfix: {description} matched "
             f"{count} times instead of once."
         )
 
@@ -40,158 +40,67 @@ def patch_run_ai_bot() -> None:
 
     source = replace_once(
         source,
-        "    form_step_delay_seconds,\n)",
-        "    form_step_delay_seconds,\n"
-        "    preferred_application_email,\n"
-        ")",
-        "preferred email import",
-    )
-
-    source = replace_once(
-        source,
-        "from modules.validator import validate_config\n",
-        "from modules.validator import validate_config\n"
-        "from modules.single_instance import (\n"
-        "    acquire_instance_lock,\n"
-        "    release_instance_lock,\n"
+        "randomly_answered_questions = set()\n",
+        "randomly_answered_questions = set()\n\n"
+        "# Add AI roles that are realistic extensions of the candidate's\n"
+        "# full-stack, .NET, DevOps, automation, and LLM integration profile.\n"
+        "AI_SEARCH_TERMS = [\n"
+        "    'AI Application Developer',\n"
+        "    'AI Software Engineer',\n"
+        "    'Generative AI Developer',\n"
+        "    'LLM Application Developer',\n"
+        "    'AI Integration Developer',\n"
+        "    'AI Automation Engineer',\n"
+        "]\n\n"
+        "for ai_search_term in AI_SEARCH_TERMS:\n"
+        "    if not any(\n"
+        "        existing.casefold() == ai_search_term.casefold()\n"
+        "        for existing in search_terms\n"
+        "    ):\n"
+        "        search_terms.append(ai_search_term)\n\n"
+        "print_lg(\n"
+        "    'Configured rotating search terms: ',\n"
+        "    search_terms,\n"
         ")\n",
-        "single-instance imports",
-    )
-
-    email_logic_old = """            prev_answer = selected_option
-
-            deterministic_language_answer = (
-"""
-    email_logic_new = """            prev_answer = selected_option
-
-            deterministic_email_answer = None
-            if (
-                preferred_application_email
-                and 'email' in label
-            ):
-                matching_email = next(
-                    (
-                        option
-                        for option in optionsText
-                        if option.strip().casefold()
-                        == preferred_application_email.casefold()
-                    ),
-                    None,
-                )
-
-                if matching_email is not None:
-                    deterministic_email_answer = matching_email
-                    print_lg(
-                        "DETERMINISTIC EMAIL ANSWER | "
-                        f"question={label_org!r} | "
-                        f"answer={matching_email!r} | "
-                        f"previous={selected_option!r}"
-                    )
-                else:
-                    raise UnresolvedApplicationQuestion(
-                        label_org,
-                        "single_select",
-                        "Configured preferred application email was not "
-                        f"available. preferred={preferred_application_email!r}; "
-                        f"options={optionsText!r}",
-                    )
-
-            deterministic_language_answer = (
-"""
-    source = replace_once(
-        source,
-        email_logic_old,
-        email_logic_new,
-        "deterministic preferred email resolver",
+        "AI search term extension",
     )
 
     source = replace_once(
         source,
-        "                or deterministic_language_answer is not None\n",
-        "                or deterministic_language_answer is not None\n"
-        "                or deterministic_email_answer is not None\n",
-        "preferred email overwrite condition",
+        "        current_count = 0\n"
+        "        try:\n"
+        "            while current_count < switch_number:\n",
+        "        current_count = 0\n"
+        "        role_attempt_count = 0\n"
+        "        try:\n"
+        "            while role_attempt_count < switch_number:\n",
+        "per-role attempt counter",
     )
 
     source = replace_once(
         source,
-        "                if deterministic_language_answer is not None:\n"
-        "                    answer = deterministic_language_answer\n"
-        "                elif 'email' in label or 'phone' in label:\n"
-        "                    answer = prev_answer\n",
-        "                if deterministic_email_answer is not None:\n"
-        "                    answer = deterministic_email_answer\n"
-        "                elif deterministic_language_answer is not None:\n"
-        "                    answer = deterministic_language_answer\n"
-        "                elif 'email' in label or 'phone' in label:\n"
-        "                    answer = prev_answer\n",
-        "preferred email selection priority",
+        "                    if current_count >= switch_number: break\n",
+        "                    if role_attempt_count >= switch_number:\n"
+        "                        print_lg(\n"
+        "                            f'Rotating away from {searchTerm!r} after '\n"
+        "                            f'{role_attempt_count} new application attempts.'\n"
+        "                        )\n"
+        "                        break\n",
+        "role rotation break condition",
     )
 
     source = replace_once(
         source,
-        "                            try:\n"
-        "                                errored = \"\"\n"
-        "                                modal = find_by_class(driver, \"jobs-easy-apply-modal\")\n",
-        "                            unresolved_error = None\n"
-        "                            try:\n"
-        "                                errored = \"\"\n"
-        "                                modal = find_by_class(driver, \"jobs-easy-apply-modal\")\n",
-        "unresolved exception initialization",
-    )
-
-    source = replace_once(
-        source,
-        "                            except UnresolvedApplicationQuestion as unresolved_error:\n"
-        "                                errored = \"unresolved\"\n",
-        "                            except UnresolvedApplicationQuestion as error:\n"
-        "                                unresolved_error = error\n"
-        "                                errored = \"unresolved\"\n",
-        "unresolved exception capture",
-    )
-
-    source = replace_once(
-        source,
-        "                                if errored == \"unresolved\":\n"
-        "                                    raise unresolved_error\n",
-        "                                if (\n"
-        "                                    errored == \"unresolved\"\n"
-        "                                    and unresolved_error is not None\n"
-        "                                ):\n"
-        "                                    raise unresolved_error\n",
-        "safe unresolved exception re-raise",
-    )
-
-    source = replace_once(
-        source,
-        "def main() -> None:\n"
-        "    # pyautogui.alert",
-        "def main() -> None:\n"
-        "    acquire_instance_lock()\n"
-        "    # pyautogui.alert",
-        "single-instance lock acquisition",
-    )
-
-    source = replace_once(
-        source,
-        "    finally:\n"
-        "        summary = \"Total runs:",
-        "    finally:\n"
-        "        release_instance_lock()\n"
-        "        summary = \"Total runs:",
-        "single-instance lock release",
-    )
-
-    source = source.replace(
-        "        msg = f\"{quotes}\\n\\n\\n{timeSavedMsg}\\nYou can also get your quote and name shown here, or prioritize your bug reports by supporting the project at:\\n\\nhttps://github.com/sponsors/GodsScion\\n\\n\\nSummary:\\n{summary}\\n\\n\\nBest regards,\\nSai Vignesh Golla\\nhttps://www.linkedin.com/in/saivigneshgolla/\\n\\nTop Sponsors:\\n{sponsors}\"\n",
-        "        msg = f\"Job application run finished.\\n\\n{summary}\"\n",
-        1,
-    )
-
-    source = source.replace(
-        "        pyautogui.alert(msg, \"Exiting..\")\n",
-        "        pyautogui.alert(msg, \"Job application run finished\")\n",
-        1,
+        "                    job_link = \"https://www.linkedin.com/jobs/view/\"+job_id\n",
+        "                    role_attempt_count += 1\n"
+        "                    print_lg(\n"
+        "                        'ROLE ATTEMPT | '\n"
+        "                        f'search={searchTerm!r} | '\n"
+        "                        f'attempt={role_attempt_count}/{switch_number} | '\n"
+        "                        f'title={title!r} | company={company!r}'\n"
+        "                    )\n\n"
+        "                    job_link = \"https://www.linkedin.com/jobs/view/\"+job_id\n",
+        "new-application attempt increment",
     )
 
     source = source.replace(
@@ -201,6 +110,10 @@ def patch_run_ai_bot() -> None:
     )
 
     TARGET.write_text(source, encoding="utf-8", newline="\n")
+    print(
+        "Applied AI search-term and role-rotation hotfix. "
+        "This run will use the updated behavior."
+    )
 
 
 patch_run_ai_bot()
