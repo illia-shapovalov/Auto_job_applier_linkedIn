@@ -14,6 +14,23 @@ Support me: https://github.com/sponsors/GodsScion
 version:    26.01.20.5.08
 '''
 
+import os
+import sys
+
+from modules.runtime_hotfix import apply_runtime_hotfix
+
+
+if apply_runtime_hotfix():
+    print(
+        "Applied the deterministic form-answer hotfix. "
+        "Restarting the bot once..."
+    )
+    os.execv(
+        sys.executable,
+        [sys.executable, *sys.argv],
+    )
+
+
 from modules.helpers import get_default_temp_profile, make_directories
 from config.settings import run_in_background, stealth_mode, disable_extensions, safe_mode, file_name, failed_file_name, logs_folder_path, generated_resume_path
 from config.questions import default_resume_path
