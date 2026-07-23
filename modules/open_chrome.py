@@ -43,14 +43,18 @@ def createChromeSession(isRetry: bool = False):
         options.add_argument(f"--user-data-dir={profile_dir}")
     else:
         print_lg("Logging in with a guest profile, Web history will not be saved!")
-        options.add_argument(f"--user-data-dir={get_default_temp_profile()}")
+        options.add_argument(r"--user-data-dir=C:\temp\auto-job-apply-profile")
     if stealth_mode:
         # try: 
         #     driver = uc.Chrome(driver_executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe", options=options)
         # except (FileNotFoundError, PermissionError) as e: 
         #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__)) 
             print_lg("Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!")
-            driver = uc.Chrome(options=options)
+            driver = uc.Chrome(
+                options=options,
+                version_main=150,
+                use_subprocess=True,
+            )
     else: driver = webdriver.Chrome(options=options) #, service=Service(executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe"))
     driver.maximize_window()
     wait = WebDriverWait(driver, 5)
@@ -72,4 +76,3 @@ except Exception as e:
     alert(msg, "Error in opening chrome")
     try: driver.quit()
     except NameError: exit()
-    

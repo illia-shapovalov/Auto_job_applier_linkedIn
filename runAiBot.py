@@ -318,7 +318,9 @@ def get_job_main_details(job: WebElement, blacklisted_companies: set, rejected_j
             print_lg(f'Already applied to "{title} | {company}" job. Job ID: {job_id}!')
     except: pass
     try: 
-        if not skip: job_details_button.click()
+        if not skip:
+            dismiss_linkedin_cookie_banner(driver, timeout=1)
+            job_details_button.click()
     except Exception as e:
         print_lg(f'Failed to click "{title} | {company}" job on details button. Job ID: {job_id}!') 
         # print_lg(e)
@@ -874,6 +876,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
     if randomize_search_order:  shuffle(search_terms)
     for searchTerm in search_terms:
         driver.get(f"https://www.linkedin.com/jobs/search/?keywords={searchTerm}")
+        dismiss_linkedin_cookie_banner(driver, timeout=3)
         print_lg("\n________________________________________________________________________________________________________________________\n")
         print_lg(f'\n>>>> Now searching for "{searchTerm}" <<<<\n\n')
 
@@ -1172,7 +1175,7 @@ chatGPT_tab = False
 linkedIn_tab = False
 
 def main() -> None:
-    pyautogui.alert("Please consider sponsoring this project at:\n\nhttps://github.com/sponsors/GodsScion\n\n", "Support the project", "Okay")
+    # pyautogui.alert("Please consider sponsoring this project at:\n\nhttps://github.com/sponsors/GodsScion\n\n", "Support the project", "Okay")
     total_runs = 1
     try:
         global linkedIn_tab, tabs_count, useNewResume, aiClient

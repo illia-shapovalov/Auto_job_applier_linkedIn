@@ -284,3 +284,47 @@ def truncate_for_csv(data, max_length: int = 131000, suffix: str = "...[TRUNCATE
         return truncated
     except Exception as e:
         return f"[ERROR CONVERTING DATA: {e}]"
+
+def dismiss_linkedin_cookie_banner(driver, timeout: int = 3) -> bool:
+    """
+    Close LinkedIn's cookie-consent banner when it appears.
+
+    Returns True when a consent button was clicked, otherwise False.
+    """
+    from selenium.common.exceptions import (
+        ElementClickInterceptedException,
+        StaleElementReferenceException,
+        TimeoutException,
+    )
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    button_selectors = [
+        (By.XPATH, "//button[normalize-space()='Reject']"),
+        (By.XPATH, "//button[normalize-space()='Accept']"),
+        (By.XPATH, "//button[contains(normalize-space(.), 'Reject')]"),
+        (By.XPATH, "//button[contains(normalize-space(.), 'Accept')]"),
+    ]
+
+    for by, selector in button_selectors:
+        try:
+            button = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((by, selector))
+            )
+
+            try:
+                button.click()
+            except ElementClickInterceptedException:
+                driver.execute_script("arguments[0].click();", button)
+
+            print_lg("LinkedIn cookie banner dismissed.")
+            return True
+
+        except (TimeoutException, StaleElementReferenceException):
+            continue
+        except Exception as error:
+            print_lg("Failed dismissing LinkedIn cookie banner:", error)
+            return False
+
+    return False
