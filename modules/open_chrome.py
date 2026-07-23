@@ -50,11 +50,49 @@ def createChromeSession(isRetry: bool = False):
         # except (FileNotFoundError, PermissionError) as e: 
         #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__)) 
             print_lg("Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!")
-            driver = uc.Chrome(
-                options=options,
-                version_main=150,
-                use_subprocess=True,
-            )
+            chrome_version = None
+            try:
+                import winreg
+
+                registry_paths = [
+                    r"SOFTWARE\Google\Chrome\BLBeacon",
+                    r"SOFTWARE\WOW6432Node\Google\Chrome\BLBeacon",
+                ]
+
+                for registry_path in registry_paths:
+                    try:
+                        with winreg.OpenKey(
+                            winreg.HKEY_CURRENT_USER,
+                            registry_path,
+                        ) as key:
+                            version, _ = winreg.QueryValueEx(key, "version")
+                            chrome_version = int(version.split(".")[0])
+                            break
+                    except OSError:
+                        try:
+                            with winreg.OpenKey(
+                                winreg.HKEY_LOCAL_MACHINE,
+                                registry_path,
+                            ) as key:
+                                version, _ = winreg.QueryValueEx(key, "version")
+                                chrome_version = int(version.split(".")[0])
+                                break
+                        except OSError:
+                            continue
+
+            except Exception as error:
+                print_lg("Unable to detect Chrome version automatically:", error)
+
+            chrome_arguments = {
+                "options": options,
+                "use_subprocess": True,
+            }
+
+            if chrome_version:
+                chrome_arguments["version_main"] = chrome_version
+                print_lg(f"Detected Chrome major version: {chrome_version}")
+
+            driver = uc.Chrome(**chrome_arguments)
     else: driver = webdriver.Chrome(options=options) #, service=Service(executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe"))
     driver.maximize_window()
     wait = WebDriverWait(driver, 5)
