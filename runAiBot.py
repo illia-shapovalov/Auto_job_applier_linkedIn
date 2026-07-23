@@ -1,3 +1,18 @@
+
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(
+        encoding="utf-8",
+        errors="replace",
+    )
+
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(
+        encoding="utf-8",
+        errors="replace",
+    )
+
 '''
 Author:     Sai Vignesh Golla
 LinkedIn:   https://www.linkedin.com/in/saivigneshgolla/
@@ -48,6 +63,8 @@ from config.secrets import (
     salary_strategy,
     salary_premium_percent,
     salary_round_to,
+    form_action_delay_seconds,
+    form_step_delay_seconds,
 )
 from config.settings import *
 
@@ -465,6 +482,164 @@ class UnresolvedApplicationQuestion(RuntimeError):
         )
 
 
+
+def detect_language_question(question: str) -> str | None:
+    normalized = question.casefold()
+
+    languages = {
+        "French": ("french", "français", "francais"),
+        "English": ("english", "anglais"),
+        "Ukrainian": (
+            "ukrainian",
+            "ukrainien",
+            "україн",
+        ),
+        "Russian": (
+            "russian",
+            "russe",
+            "русск",
+        ),
+    }
+
+    level_terms = (
+        "level",
+        "niveau",
+        "proficiency",
+        "fluency",
+        "language",
+        "langue",
+        "speak",
+        "parlez",
+        "parle",
+        "maîtrise",
+        "maitrise",
+    )
+
+    if not any(
+        term in normalized
+        for term in level_terms
+    ):
+        return None
+
+    for language, terms in languages.items():
+        if any(
+            term in normalized
+            for term in terms
+        ):
+            return language
+
+    return None
+
+
+def choose_deterministic_language_answer(
+    question: str,
+    options: list[str],
+) -> str | None:
+    language = detect_language_question(question)
+
+    if language is None:
+        return None
+
+    blocked_terms = (
+        "do not speak",
+        "don't speak",
+        "ne parle pas",
+        "ne parlez pas",
+        "no proficiency",
+        "no knowledge",
+        "beginner",
+        "débutant",
+        "debutant",
+        "basic",
+        "elementary",
+        "élémentaire",
+        "elementaire",
+        "none",
+        "aucun",
+        "not applicable",
+    )
+
+    preferred_groups = (
+        (
+            "fluent",
+            "courant",
+            "courante",
+            "couramment",
+        ),
+        (
+            "full professional proficiency",
+            "pleine compétence professionnelle",
+            "pleine competence professionnelle",
+        ),
+        (
+            "professional working proficiency",
+            "professional proficiency",
+            "compétence professionnelle",
+            "competence professionnelle",
+        ),
+        (
+            "advanced",
+            "avancé",
+            "avance",
+            "avancée",
+            "avancee",
+        ),
+        (
+            "bilingual",
+            "bilingue",
+        ),
+    )
+
+    safe_options = []
+
+    for option in options:
+        option_text = option.strip()
+        normalized = option_text.casefold()
+
+        if not option_text:
+            continue
+
+        if normalized in {
+            "select an option",
+            "sélectionnez une option",
+            "selectionnez une option",
+        }:
+            continue
+
+        if any(
+            blocked in normalized
+            for blocked in blocked_terms
+        ):
+            continue
+
+        safe_options.append(option_text)
+
+    for preferred_terms in preferred_groups:
+        for option in safe_options:
+            normalized = option.casefold()
+
+            if any(
+                term in normalized
+                for term in preferred_terms
+            ):
+                print_lg(
+                    "DETERMINISTIC LANGUAGE ANSWER | "
+                    f"language={language!r} | "
+                    f"question={question!r} | "
+                    f"answer={option!r} | "
+                    f"options={options!r} | "
+                    "reason='Configured fluent proficiency'"
+                )
+                return option
+
+    raise UnresolvedApplicationQuestion(
+        question,
+        "single_select",
+        "No safe deterministic fluent option found. "
+        f"Language={language!r}; options={options!r}",
+    )
+
+
 def resolve_unknown_question_with_ai(
     question: str,
     question_type: str,
@@ -576,8 +751,14 @@ def resolve_unknown_question_with_ai(
         answer = matched_answer
 
     print_lg(
-        f'AI safely answered "{question}" with "{answer}" '
-        f"(confidence={confidence:.2f})."
+        "ACCEPTED AI FORM ANSWER | "
+        f"question={question!r} | "
+        f"type={question_type!r} | "
+        f"answer={answer!r} | "
+        f"confidence={confidence:.2f} | "
+        f"supported={supported!r} | "
+        f"reason={reason!r} | "
+        f"options={clean_options!r}"
     )
 
     return answer
@@ -664,6 +845,26 @@ def calculate_salary_answer(
 
     return str(fallback_salary)
 
+
+def wait_after_form_action(
+    delay_seconds: float | None = None,
+) -> None:
+    """
+    Pause after a form interaction.
+
+    Uses FORM_ACTION_DELAY_SECONDS unless an explicit delay is given.
+    """
+    delay = (
+        form_action_delay_seconds
+        if delay_seconds is None
+        else delay_seconds
+    )
+
+    if delay > 0:
+        sleep(delay)
+
+
+
 # Function to answer common questions for Easy Apply
 def answer_common_questions(label: str, answer: str) -> str:
     if 'sponsorship' in label or 'visa' in label: answer = require_visa
@@ -699,9 +900,24 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 optionsText = [option.text for option in select.options]
                 options = "".join([f' "{option}",' for option in optionsText])
             prev_answer = selected_option
-            if overwrite_previous_answers or selected_option == "Select an option":
+
+            deterministic_language_answer = (
+                choose_deterministic_language_answer(
+                    label_org,
+                    optionsText,
+                )
+            )
+            should_answer_select = (
+                overwrite_previous_answers
+                or selected_option == "Select an option"
+                or deterministic_language_answer is not None
+            )
+
+            if should_answer_select:
                 ##> ------ WINDY_WINDWARD Email:karthik.sarode23@gmail.com - Added fuzzy logic to answer location based questions ------
-                if 'email' in label or 'phone' in label: 
+                if deterministic_language_answer is not None:
+                    answer = deterministic_language_answer
+                elif 'email' in label or 'phone' in label:
                     answer = prev_answer
                 elif 'gender' in label or 'sex' in label: 
                     answer = gender
@@ -758,6 +974,8 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                             job_description=job_description,
                         )
                         select.select_by_visible_text(answer)
+                        wait_after_form_action()
+                        wait_after_form_action()
             questions_list.add((f'{label_org} [ {options} ]', answer, "select", prev_answer))
             continue
         
@@ -808,6 +1026,7 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                     actions.move_to_element(
                         foundOption
                     ).click().perform()
+                    wait_after_form_action()
                 else:
                     possible_answer_phrases = (
                         [
@@ -849,6 +1068,7 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                     actions.move_to_element(
                         options[matched_index]
                     ).click().perform()
+                    wait_after_form_action()
 
                     answer = option_texts[matched_index]
             else: answer = prev_answer
@@ -924,6 +1144,7 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                     )
                 text.clear()
                 text.send_keys(answer)
+                wait_after_form_action()
                 if do_actions:
                     sleep(2)
                     actions.send_keys(Keys.ARROW_DOWN)
@@ -950,6 +1171,7 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                     )
             text_area.clear()
             text_area.send_keys(answer)
+            wait_after_form_action()
             if do_actions:
                     sleep(2)
                     actions.send_keys(Keys.ARROW_DOWN)
@@ -972,6 +1194,7 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 try:
                     actions.move_to_element(checkbox).click().perform()
                     checked = True
+                    wait_after_form_action()
                 except Exception as e: 
                     print_lg("Checkbox click failed!", e)
                     pass
@@ -1308,8 +1531,14 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     if useNewResume and not uploaded: uploaded, resume = upload_resume(modal, default_resume_path)
                                     try: next_button = modal.find_element(By.XPATH, './/span[normalize-space(.)="Review"]') 
                                     except NoSuchElementException:  next_button = modal.find_element(By.XPATH, './/button[contains(span, "Next")]')
-                                    try: next_button.click()
-                                    except ElementClickInterceptedException: break    # Happens when it tries to click Next button in About Company photos section
+                                    try:
+                                        next_button.click()
+                                    except ElementClickInterceptedException:
+                                        break
+
+                                    wait_after_form_action(
+                                        form_step_delay_seconds
+                                    )
                                     buffer(click_gap)
 
                             except UnresolvedApplicationQuestion as unresolved_error:

@@ -371,6 +371,380 @@ Examples:
   comfort with remote work unless contradictory information is present.
 - A stated willingness to travel supports an equivalent travel question.
 
+
+
+Tailored application-text rules:
+
+Before answering a text or textarea field, determine whether it is asking
+for one of these application-writing purposes:
+
+1. Cover letter
+   Examples include:
+   - cover letter
+   - lettre de motivation
+   - motivation letter
+   - application letter
+   - letter to the hiring manager
+   - explain why you are a suitable candidate
+
+2. Professional summary
+   Examples include:
+   - professional summary
+   - résumé professionnel
+   - candidate summary
+   - profile summary
+   - about you
+   - tell us about yourself
+   - short biography
+   - brief introduction
+
+3. Role motivation
+   Examples include:
+   - why are you interested in this role
+   - why do you want to work here
+   - pourquoi ce poste vous intéresse
+   - why should we hire you
+   - what makes you a good fit
+
+For every cover-letter field:
+
+- Generate a new, job-specific cover letter from the supplied job
+  description and verified candidate profile.
+- Match the language used by the form question or job description.
+- Use French for a French field or predominantly French job posting.
+- Use English for an English field or predominantly English job posting.
+- Connect the candidate's strongest relevant technologies, projects,
+  professional experience, business experience, infrastructure work,
+  language skills, and transferable experience to the employer's actual
+  requirements.
+- Mention only evidence available in the verified candidate profile.
+- Do not invent employers, credentials, degrees completed, certifications,
+  security clearance, technologies, achievements, or exact experience.
+- Do not use placeholders such as [Company Name], [Hiring Manager],
+  [Position], or [Your Name].
+- Do not include a postal-address header.
+- Do not include Markdown, headings, bullet points, or code formatting.
+- Do not begin with generic phrases such as "I am writing to apply".
+- Prefer a direct opening that identifies the candidate's relevant value.
+- Keep the answer between 130 and 220 words unless the field clearly
+  requests a shorter response.
+- Use two to four short paragraphs.
+- End professionally without adding fabricated contact details.
+- Output only the text that should be inserted into the form.
+
+For every professional-summary field:
+
+- Generate a job-specific professional summary using the job description
+  and verified candidate profile.
+- Lead with the candidate's strongest relevant professional identity.
+- Prioritize technologies and responsibilities present in the job posting.
+- Include adjacent or transferable knowledge only when reasonably
+  supported, and phrase it accurately.
+- Keep the answer between 60 and 120 words unless the field specifies
+  another limit.
+- Use one concise paragraph.
+- Do not use first-person greetings, a sign-off, Markdown, headings,
+  placeholders, or bullet points.
+- Output only the text that should be inserted into the form.
+
+For role-motivation fields:
+
+- Explain the fit between the role's real responsibilities and the
+  candidate's verified experience.
+- Refer to concrete requirements from the job description.
+- Avoid unsupported enthusiasm, exaggerated praise, and generic statements
+  that could apply to any employer.
+- Keep the answer between 70 and 140 words unless the field requests a
+  different length.
+- Output only the answer to insert into the field.
+
+The job description is the source of role and employer requirements.
+The candidate profile is the source of candidate facts.
+
+Never copy long passages from the job description. Synthesize them into
+an original, natural response.
+
+If a cover-letter, professional-summary, or motivation field is detected,
+a supported answer may be generated when the candidate profile contains
+enough relevant evidence, even though the exact prose was not previously
+written in the profile.
+
+Language proficiency rules:
+
+The candidate language profile is authoritative.
+
+Interpret the following levels:
+
+- Native:
+  Native or near-native proficiency.
+
+- Fluent:
+  Full professional proficiency in speaking, reading, and writing.
+
+- Professional:
+  Professional working proficiency.
+
+- Intermediate:
+  Conversational or limited professional proficiency.
+
+- Basic:
+  Elementary knowledge only.
+
+For language dropdowns:
+
+- French marked Fluent supports selecting:
+  Fluent, Advanced, Professional proficiency, Bilingual,
+  Full professional proficiency, or the closest equivalent.
+
+- English marked Fluent supports selecting:
+  Fluent, Advanced, Professional proficiency, Bilingual,
+  Full professional proficiency, or the closest equivalent.
+
+- Ukrainian marked Native supports selecting:
+  Native, Mother tongue, Fluent, Bilingual,
+  or the strongest equivalent option.
+
+- Russian marked Fluent supports selecting:
+  Fluent, Advanced, Professional proficiency,
+  or the closest equivalent.
+
+Never select options meaning:
+- I do not speak this language
+- Je ne parle pas cette langue
+- No proficiency
+- Beginner
+- Basic
+
+when the candidate profile states Fluent or Native.
+
+For single-select language questions, return the exact matching option text.
+
+If multiple strong options exist, prefer this order:
+1. Native or Mother tongue, when the profile says Native
+2. Fluent
+3. Full professional proficiency
+4. Advanced
+5. Professional proficiency
+6. Bilingual
+
+Do not infer a language level from the job description.
+Use only the verified candidate language profile.
+
+Technology mastery ratings are on a 10-point scale.
+
+Interpret them as follows:
+- 9-10: expert or highly advanced
+- 8-8.9: strong professional proficiency
+- 7-7.9: solid working proficiency
+- 6-6.9: intermediate familiarity
+- below 6: limited or developing experience
+
+A rating of 7/10 or higher supports answering Yes to whether the
+candidate has meaningful experience with that technology.
+
+A rating of 8/10 or higher supports strong positive wording.
+
+A rating of 9/10 or higher supports describing the candidate as highly
+proficient or advanced.
+
+Ratings do not independently prove exact years of experience, but they
+may be combined with total relevant experience, employment history,
+projects, and closely related technologies.
+
+
+Adjacent and transferable knowledge rules:
+
+The candidate may have meaningful familiarity with a technology,
+methodology, or platform that is not named explicitly when it is
+closely adjacent to strongly supported experience.
+
+Use these evidence classifications internally:
+
+1. Direct experience
+   The technology or methodology is explicitly listed in the candidate
+   profile, employment history, projects, or mastery file.
+
+2. Closely adjacent experience
+   The candidate has strong experience with technologies that use the
+   same core concepts, configuration patterns, responsibilities, or
+   operating model.
+
+3. Conceptual familiarity
+   The candidate's broader engineering background makes knowledge of
+   the concept reasonable, but direct hands-on use is not established.
+
+4. Unsupported
+   There is no sufficiently close evidence.
+
+Examples of closely adjacent technology families:
+
+- Traefik, NGINX, Caddy, HAProxy, Apache reverse proxy, ingress
+  controllers, load balancers, TLS termination, and reverse-proxy
+  servers share substantial concepts such as routing, host rules,
+  certificates, upstream services, ports, headers, and proxies.
+
+- Docker, container networking, reverse proxies, Kubernetes ingress,
+  service discovery, and container orchestration are related, but
+  experience with one does not automatically prove expert experience
+  with every other member of the group.
+
+- SQL Server, PostgreSQL, MySQL, Oracle, relational databases, SQL,
+  schemas, joins, indexing, transactions, and stored procedures are
+  closely related, while vendor-specific administration features may
+  still require direct evidence.
+
+- C#, .NET, ASP.NET, ASP.NET Core, Entity Framework, Web APIs, MVC,
+  dependency injection, NuGet, and Microsoft enterprise development
+  are closely related members of the same core stack.
+
+- GitHub Actions, GitLab CI, Jenkins, Azure DevOps, CI/CD pipelines,
+  build automation, deployment automation, and release workflows share
+  transferable concepts.
+
+- Ansible, Terraform, OpenTofu, infrastructure as code, configuration
+  management, provisioning, and automation have transferable concepts,
+  but they are not interchangeable for exact-years questions.
+
+Software-delivery methodology rules:
+
+- Demonstrated work with Jira, Scrum ceremonies, sprint planning,
+  backlogs, iterative delivery, issue tracking, pull requests, CI/CD,
+  and cross-functional development supports familiarity with Agile.
+
+- Scrum experience supports familiarity with Kanban concepts such as
+  boards, work-in-progress, workflow states, backlog prioritization,
+  and continuous flow.
+
+- General software-engineering education and enterprise project
+  experience support conceptual familiarity with Waterfall and the
+  software development life cycle.
+
+- Do not claim that the candidate led, formally practiced, or has a
+  specific number of years with a methodology unless direct evidence
+  supports that statement.
+
+
+
+Unsupported specialist-stack guard:
+
+The following specialist technologies require direct evidence and must
+never be inferred from general software-development experience:
+
+- iOS
+- Swift
+- Objective-C
+- Xcode
+- UIKit
+- SwiftUI
+- Cocoa Touch
+- native Apple mobile development
+
+If none of these technologies appears in the verified candidate
+profile, answer UNKNOWN to direct-experience questions involving them.
+
+Do not convert C#, .NET, JavaScript, TypeScript, Angular, React, web
+development, or general mobile familiarity into native iOS experience.
+
+Strict direct-experience guard:
+
+Questions asking whether the candidate has "experience with", "worked
+with", "professional experience", "hands-on experience", or production
+experience require direct evidence from at least one of these sources:
+
+- the verified technology mastery profile
+- verified employment history
+- verified project or homelab evidence
+- verified additional experience evidence
+
+Adjacent technologies alone must not produce a Yes answer to a direct
+experience question.
+
+Adjacent knowledge may support Yes only for wording such as:
+
+- familiar with
+- knowledge of
+- comfortable learning
+- able to work with
+- understands the concepts of
+- transferable experience relevant to
+
+Examples:
+
+- Traefik experience may support Yes to "Are you familiar with NGINX?"
+- Traefik experience must not support Yes to "Do you have professional
+  NGINX experience?"
+- General mobile or frontend experience must not support Yes to direct
+  iOS, Swift, Objective-C, Xcode, or UIKit experience.
+- Android knowledge must not be converted into iOS experience.
+- JavaScript, React, Angular, or web development must not be converted
+  into React Native or native iOS development unless those are directly
+  present in the candidate profile.
+
+For a binary direct-experience question:
+
+- return Yes only when direct evidence exists
+- return No only when the profile clearly establishes no experience
+- otherwise return UNKNOWN and allow the application to be skipped
+
+Never choose Yes merely because the skill appears in the job
+description. The job description describes employer requirements, not
+candidate experience.
+
+Decision rules for adjacent knowledge:
+
+- For a broad question such as "Are you familiar with NGINX?", closely
+  adjacent reverse-proxy experience may support answering Yes.
+
+- For "Do you have experience with NGINX?", closely adjacent experience
+  may support Yes at assertiveness level 3 when the required concepts
+  are substantially equivalent.
+
+- For "Are you an NGINX expert?", return UNKNOWN or No unless NGINX is
+  directly supported at a high level.
+
+- For "How many years of professional NGINX experience do you have?",
+  do not convert Traefik experience into exact NGINX years. Return
+  UNKNOWN unless direct NGINX duration is available.
+
+- For descriptive answers, clearly frame adjacent knowledge as
+  transferable experience, working familiarity, or closely related
+  experience rather than direct production experience.
+
+- A closely adjacent inference may support Yes for familiarity,
+  comfort, knowledge, or ability-to-work-with questions.
+
+- A closely adjacent inference must not establish certifications,
+  formal credentials, security clearance, employment dates, exact
+  years, or vendor-specific expert status.
+
+- When making an adjacent inference, explain the supporting relationship
+  in the reason field.
+
+For numeric years-of-experience questions:
+
+- At assertiveness level 3, a technology rated 8/10 or higher may use a
+  conservative portion of the candidate's total relevant technical
+  experience when that technology is clearly part of the candidate's
+  core stack or is directly supported by closely related technologies.
+
+- The estimated technology-specific duration must never exceed the
+  candidate's total relevant technical experience.
+
+- For a core technology rated 9/10 or higher, use the candidate's total
+  relevant technical experience rounded down conservatively.
+
+- For a core technology rated 8-8.9/10, use approximately 80-90 percent
+  of total relevant technical experience, rounded down conservatively.
+
+- For a technology rated 7-7.9/10, do not derive years from mastery
+  alone unless explicit dates or duration are also provided.
+
+- Return a concise numeric value only when the form asks for years.
+
+- Do not return UNKNOWN merely because exact start and end dates are
+  absent when the candidate profile clearly establishes substantial,
+  long-term experience with a core technology.
+
 For high-risk factual questions, use only direct and unambiguous facts.
 
 The following distinctions are mandatory:

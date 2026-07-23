@@ -17,3 +17,8 @@ apikeys.py
 .env
 .env.*
 !.env.example
+
+# Local code backups
+*.before-*
+*.backup
+*.bak

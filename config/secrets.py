@@ -1,3 +1,4 @@
+import csv
 """
 Load private credentials and AI settings from the repository's root .env file.
 
@@ -213,6 +214,163 @@ certifications_willing_to_obtain = get_csv(
 )
 
 
+form_action_delay_seconds = get_float(
+    "FORM_ACTION_DELAY_SECONDS",
+    default=0.75,
+    minimum=0,
+)
+
+form_step_delay_seconds = get_float(
+    "FORM_STEP_DELAY_SECONDS",
+    default=2.0,
+    minimum=0,
+)
+
+
+
+technology_mastery_file = os.getenv(
+    "TECHNOLOGY_MASTERY_FILE",
+    "config/technologies_mastering.csv",
+).strip()
+
+
+def load_technology_mastery_context() -> str:
+    csv_path = Path(technology_mastery_file)
+
+    if not csv_path.is_absolute():
+        csv_path = (
+            Path(__file__).resolve().parent.parent
+            / csv_path
+        )
+
+    if not csv_path.exists():
+        return (
+            "Technology mastery file not found: "
+            f"{csv_path}"
+        )
+
+    entries = []
+
+    with csv_path.open(
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as file:
+        rows = list(csv.reader(file))
+
+    for row in rows:
+        values = [
+            value.strip()
+            for value in row
+        ]
+
+        if not values or not any(values):
+            continue
+
+        technology = values[0] if len(values) >= 1 else ""
+        mastery = values[1] if len(values) >= 2 else ""
+        notes = values[2] if len(values) >= 3 else ""
+
+        if not technology:
+            continue
+
+        # Ignore obvious header rows.
+        normalized_name = technology.casefold()
+
+        if normalized_name in {
+            "technology",
+            "technologies",
+            "technology name",
+            "name",
+        }:
+            continue
+
+        if not mastery and not notes:
+            continue
+
+        entry = f"- {technology}"
+
+        if mastery:
+            entry += f": mastery {mastery}/10"
+
+        if notes:
+            entry += f"; {notes}"
+
+        entries.append(entry)
+
+    if not entries:
+        return (
+            "Technology mastery CSV was loaded, "
+            "but no technology entries were recognized."
+        )
+
+    return "\n".join(
+        [
+            "Verified technology mastery profile:",
+            *entries,
+        ]
+    )
+
+
+technology_mastery_context = (
+    load_technology_mastery_context()
+)
+
+
+
+language_french_level = os.getenv(
+    "LANGUAGE_FRENCH_LEVEL",
+    "",
+).strip()
+
+language_english_level = os.getenv(
+    "LANGUAGE_ENGLISH_LEVEL",
+    "",
+).strip()
+
+language_ukrainian_level = os.getenv(
+    "LANGUAGE_UKRAINIAN_LEVEL",
+    "",
+).strip()
+
+language_russian_level = os.getenv(
+    "LANGUAGE_RUSSIAN_LEVEL",
+    "",
+).strip()
+
+
+def build_language_profile_context() -> str:
+    languages = [
+        ("French", language_french_level),
+        ("English", language_english_level),
+        ("Ukrainian", language_ukrainian_level),
+        ("Russian", language_russian_level),
+    ]
+
+    lines = [
+        "Verified language proficiency:"
+    ]
+
+    for language, level in languages:
+        if level:
+            lines.append(
+                f"- {language}: {level}"
+            )
+
+    return "\n".join(lines)
+
+
+language_profile_context = (
+    build_language_profile_context()
+)
+
+
+preferred_application_email = os.getenv(
+    "PREFERRED_APPLICATION_EMAIL",
+    "",
+).strip()
+
+
 def build_application_profile_context() -> str:
     citizenships = []
 
@@ -302,6 +460,15 @@ def build_application_profile_context() -> str:
             + "."
         ),
     ]
+
+    lines.extend(
+        [
+            "",
+            language_profile_context,
+            "",
+            technology_mastery_context,
+        ]
+    )
 
     return "\n".join(lines)
 
