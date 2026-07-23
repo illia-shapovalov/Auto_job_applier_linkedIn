@@ -38,7 +38,17 @@ from selenium.common.exceptions import NoSuchElementException, ElementClickInter
 from config.personals import *
 from config.questions import *
 from config.search import *
-from config.secrets import use_AI, username, password, ai_provider
+from config.secrets import (
+    use_AI,
+    username,
+    password,
+    ai_provider,
+    ai_assertiveness,
+    application_profile_context,
+    salary_strategy,
+    salary_premium_percent,
+    salary_round_to,
+)
 from config.settings import *
 
 from modules.open_chrome import *
@@ -47,7 +57,7 @@ from modules.clickers_and_finders import *
 from modules.validator import validate_config
 
 if use_AI:
-    from modules.ai.openaiConnections import ai_create_openai_client, ai_extract_skills, ai_answer_question, ai_close_openai_client
+    from modules.ai.openaiConnections import ai_create_openai_client, ai_extract_skills, ai_answer_question, ai_answer_form_question, ai_close_openai_client
     from modules.ai.deepseekConnections import deepseek_create_client, deepseek_extract_skills, deepseek_answer_question
     from modules.ai.geminiConnections import gemini_create_client, gemini_extract_skills, gemini_answer_question
 
@@ -432,6 +442,228 @@ def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
         return True, os.path.basename(default_resume_path)
     except: return False, "Previous resume"
 
+
+AI_FORM_MIN_CONFIDENCE = 0.85
+
+
+class UnresolvedApplicationQuestion(RuntimeError):
+    """Raised when an application question cannot be answered safely."""
+
+    def __init__(
+        self,
+        question: str,
+        question_type: str,
+        reason: str,
+    ) -> None:
+        self.question = question
+        self.question_type = question_type
+        self.reason = reason
+
+        super().__init__(
+            f'Unable to safely answer {question_type} question '
+            f'"{question}": {reason}'
+        )
+
+
+def resolve_unknown_question_with_ai(
+    question: str,
+    question_type: str,
+    job_description: str | None = None,
+    options: list[str] | None = None,
+) -> str:
+    """
+    Ask AI for an unknown application answer and validate the result.
+
+    Raises UnresolvedApplicationQuestion rather than guessing.
+    """
+    if not use_AI or aiClient is None:
+        raise UnresolvedApplicationQuestion(
+            question,
+            question_type,
+            "AI is disabled or unavailable.",
+        )
+
+    if ai_provider.lower() != "openai":
+        raise UnresolvedApplicationQuestion(
+            question,
+            question_type,
+            f'Structured validation is not implemented for '
+            f'provider "{ai_provider}".',
+        )
+
+    clean_options = [
+        str(option).strip()
+        for option in (options or [])
+        if str(option).strip()
+        and str(option).strip().lower() not in {
+            "select an option",
+            "choose an option",
+            "please select",
+        }
+    ]
+
+    if question_type == "single_select" and not clean_options:
+        raise UnresolvedApplicationQuestion(
+            question,
+            question_type,
+            "No selectable options were found.",
+        )
+
+    result = ai_answer_form_question(
+        aiClient,
+        question=question,
+        question_type=question_type,
+        options=clean_options,
+        job_description=job_description,
+        user_information_all=(
+            f"{user_information_all}\n\n"
+            "Verified application profile facts:\n"
+            f"{application_profile_context}"
+        ),
+        assertiveness=ai_assertiveness,
+    )
+
+    if not isinstance(result, dict):
+        raise UnresolvedApplicationQuestion(
+            question,
+            question_type,
+            "AI did not return a valid structured response.",
+        )
+
+    answer = str(result.get("answer", "")).strip()
+    reason = str(result.get("reason", "")).strip()
+
+    try:
+        confidence = float(result.get("confidence", 0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    supported = result.get("supported") is True
+
+    if (
+        not supported
+        or confidence < AI_FORM_MIN_CONFIDENCE
+        or not answer
+        or answer.upper() == "UNKNOWN"
+    ):
+        raise UnresolvedApplicationQuestion(
+            question,
+            question_type,
+            reason or (
+                f"AI confidence {confidence:.2f} was below "
+                f"{AI_FORM_MIN_CONFIDENCE:.2f}."
+            ),
+        )
+
+    if clean_options:
+        normalized_options = {
+            option.casefold(): option
+            for option in clean_options
+        }
+
+        matched_answer = normalized_options.get(
+            answer.casefold()
+        )
+
+        if matched_answer is None:
+            raise UnresolvedApplicationQuestion(
+                question,
+                question_type,
+                f'AI returned "{answer}", which was not one of '
+                f"the allowed options.",
+            )
+
+        answer = matched_answer
+
+    print_lg(
+        f'AI safely answered "{question}" with "{answer}" '
+        f"(confidence={confidence:.2f})."
+    )
+
+    return answer
+
+
+def calculate_salary_answer(
+    job_description: str | None,
+    fallback_salary: str,
+) -> str:
+    """
+    Calculate the configured salary target from a posted range.
+
+    Falls back to the existing configured desired salary when no
+    reliable range is found.
+    """
+    if salary_strategy != "above_posted_midpoint":
+        return str(fallback_salary)
+
+    if not job_description:
+        return str(fallback_salary)
+
+    salary_pattern = re.compile(
+        r"""
+        (?:
+            \$|CAD\s*
+        )?
+        (?P<minimum>\d{2,3}(?:[,\s]\d{3})+|\d{2,3}(?:\.\d+)?\s*[kK])
+        \s*
+        (?:-|?|?|to)
+        \s*
+        (?:
+            \$|CAD\s*
+        )?
+        (?P<maximum>\d{2,3}(?:[,\s]\d{3})+|\d{2,3}(?:\.\d+)?\s*[kK])
+        """,
+        re.VERBOSE,
+    )
+
+    def parse_salary(value: str) -> float:
+        cleaned = (
+            value.replace(",", "")
+            .replace(" ", "")
+            .strip()
+        )
+
+        if cleaned.lower().endswith("k"):
+            return float(cleaned[:-1]) * 1000
+
+        return float(cleaned)
+
+    matches = list(
+        salary_pattern.finditer(job_description)
+    )
+
+    for match in matches:
+        minimum = parse_salary(
+            match.group("minimum")
+        )
+        maximum = parse_salary(
+            match.group("maximum")
+        )
+
+        if minimum <= 0 or maximum < minimum:
+            continue
+
+        midpoint = (minimum + maximum) / 2
+
+        target = midpoint * (
+            1 + salary_premium_percent / 100
+        )
+
+        rounded = round(
+            target / salary_round_to
+        ) * salary_round_to
+
+        print_lg(
+            "Calculated salary target from posted range: "
+            f"minimum={minimum:.0f}, "
+            f"maximum={maximum:.0f}, "
+            f"target={rounded:.0f}"
+        )
+
+        return str(int(rounded))
+
+    return str(fallback_salary)
+
 # Function to answer common questions for Easy Apply
 def answer_common_questions(label: str, answer: str) -> str:
     if 'sponsorship' in label or 'visa' in label: answer = require_visa
@@ -519,11 +751,13 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                                 foundOption = True
                                 break
                     if not foundOption:
-                        #TODO: Use AI to answer the question need to be implemented logic to extract the options for the question
-                        print_lg(f'Failed to find an option with text "{answer}" for question labelled "{label_org}", answering randomly!')
-                        select.select_by_index(randint(1, len(select.options)-1))
-                        answer = select.first_selected_option.text
-                        randomly_answered_questions.add((f'{label_org} [ {options} ]',"select"))
+                        answer = resolve_unknown_question_with_ai(
+                            question=label_org,
+                            question_type="single_select",
+                            options=optionsText,
+                            job_description=job_description,
+                        )
+                        select.select_by_visible_text(answer)
             questions_list.add((f'{label_org} [ {options} ]', answer, "select", prev_answer))
             continue
         
@@ -541,11 +775,20 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
             label_org += ' [ '
             options = radio.find_elements(By.TAG_NAME, 'input')
             options_labels = []
+            option_texts = []
             
             for option in options:
                 id = option.get_attribute("id")
                 option_label = try_xp(radio, f'.//label[@for="{id}"]', False)
-                options_labels.append( f'"{option_label.text if option_label else "Unknown"}"<{option.get_attribute("value")}>' ) # Saving option as "label <value>"
+                option_text = (
+                    option_label.text.strip()
+                    if option_label
+                    else "Unknown"
+                )
+                option_texts.append(option_text)
+                options_labels.append(
+                    f'"{option_text}"<{option.get_attribute("value")}>'
+                )
                 if option.is_selected(): prev_answer = options_labels[-1]
                 label_org += f' {options_labels[-1]},'
 
@@ -555,31 +798,59 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 elif 'disability' in label or 'handicapped' in label: 
                     answer = disability_status
                 else: answer = answer_common_questions(label,answer)
-                foundOption = try_xp(radio, f".//label[normalize-space()='{answer}']", False)
-                if foundOption: 
-                    actions.move_to_element(foundOption).click().perform()
-                else:    
-                    possible_answer_phrases = ["Decline", "not wish", "don't wish", "Prefer not", "not want"] if answer == 'Decline' else [answer]
-                    ele = options[0]
-                    answer = options_labels[0]
+                foundOption = try_xp(
+                    radio,
+                    f".//label[normalize-space()='{answer}']",
+                    False,
+                )
+
+                if foundOption:
+                    actions.move_to_element(
+                        foundOption
+                    ).click().perform()
+                else:
+                    possible_answer_phrases = (
+                        [
+                            "Decline",
+                            "not wish",
+                            "don't wish",
+                            "Prefer not",
+                            "not want",
+                        ]
+                        if answer == "Decline"
+                        else [answer]
+                    )
+
+                    matched_index = None
+
                     for phrase in possible_answer_phrases:
-                        for i, option_label in enumerate(options_labels):
-                            if phrase in option_label:
-                                foundOption = options[i]
-                                ele = foundOption
-                                answer = f'Decline ({option_label})' if len(possible_answer_phrases) > 1 else option_label
+                        for index, option_text in enumerate(
+                            option_texts
+                        ):
+                            if (
+                                phrase.casefold()
+                                in option_text.casefold()
+                            ):
+                                matched_index = index
                                 break
-                        if foundOption: break
-                    # if answer == 'Decline':
-                    #     answer = options_labels[0]
-                    #     for phrase in ["Prefer not", "not want", "not wish"]:
-                    #         foundOption = try_xp(radio, f".//label[normalize-space()='{phrase}']", False)
-                    #         if foundOption:
-                    #             answer = f'Decline ({phrase})'
-                    #             ele = foundOption
-                    #             break
-                    actions.move_to_element(ele).click().perform()
-                    if not foundOption: randomly_answered_questions.add((f'{label_org} ]',"radio"))
+
+                        if matched_index is not None:
+                            break
+
+                    if matched_index is None:
+                        answer = resolve_unknown_question_with_ai(
+                            question=label_org,
+                            question_type="single_select",
+                            options=option_texts,
+                            job_description=job_description,
+                        )
+                        matched_index = option_texts.index(answer)
+
+                    actions.move_to_element(
+                        options[matched_index]
+                    ).click().perform()
+
+                    answer = option_texts[matched_index]
             else: answer = prev_answer
             questions_list.add((label_org+" ]", answer, "radio", prev_answer))
             continue
@@ -631,7 +902,10 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                         elif 'lakh' in label:
                             answer = desired_salary_lakhs
                         else:
-                            answer = desired_salary
+                            answer = calculate_salary_answer(
+                                job_description,
+                                desired_salary,
+                            )
                 elif 'linkedin' in label: answer = linkedIn
                 elif 'website' in label or 'blog' in label or 'portfolio' in label or 'link' in label: answer = website
                 elif 'scale of 1-10' in label: answer = confidence_level
@@ -643,30 +917,11 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 else: answer = answer_common_questions(label,answer)
                 ##> ------ Yang Li : MARKYangL - Feature ------
                 if answer == "":
-                    if use_AI and aiClient:
-                        try:
-                            if ai_provider.lower() == "openai":
-                                answer = ai_answer_question(aiClient, label_org, question_type="text", job_description=job_description, user_information_all=user_information_all)
-                            elif ai_provider.lower() == "deepseek":
-                                answer = deepseek_answer_question(aiClient, label_org, options=None, question_type="text", job_description=job_description, about_company=None, user_information_all=user_information_all)
-                            elif ai_provider.lower() == "gemini":
-                                answer = gemini_answer_question(aiClient, label_org, options=None, question_type="text", job_description=job_description, about_company=None, user_information_all=user_information_all)
-                            else:
-                                randomly_answered_questions.add((label_org, "text"))
-                                answer = years_of_experience
-                            if answer and isinstance(answer, str) and len(answer) > 0:
-                                print_lg(f'AI Answered received for question "{label_org}" \nhere is answer: "{answer}"')
-                            else:
-                                randomly_answered_questions.add((label_org, "text"))
-                                answer = years_of_experience
-                        except Exception as e:
-                            print_lg("Failed to get AI answer!", e)
-                            randomly_answered_questions.add((label_org, "text"))
-                            answer = years_of_experience
-                    else:
-                        randomly_answered_questions.add((label_org, "text"))
-                        answer = years_of_experience
-                ##<
+                    answer = resolve_unknown_question_with_ai(
+                        question=label_org,
+                        question_type="text",
+                        job_description=job_description,
+                    )
                 text.clear()
                 text.send_keys(answer)
                 if do_actions:
@@ -688,29 +943,11 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 if 'summary' in label: answer = linkedin_summary
                 elif 'cover' in label: answer = cover_letter
                 if answer == "":
-                ##> ------ Yang Li : MARKYangL - Feature ------
-                    if use_AI and aiClient:
-                        try:
-                            if ai_provider.lower() == "openai":
-                                answer = ai_answer_question(aiClient, label_org, question_type="textarea", job_description=job_description, user_information_all=user_information_all)
-                            elif ai_provider.lower() == "deepseek":
-                                answer = deepseek_answer_question(aiClient, label_org, options=None, question_type="textarea", job_description=job_description, about_company=None, user_information_all=user_information_all)
-                            elif ai_provider.lower() == "gemini":
-                                answer = gemini_answer_question(aiClient, label_org, options=None, question_type="textarea", job_description=job_description, about_company=None, user_information_all=user_information_all)
-                            else:
-                                randomly_answered_questions.add((label_org, "textarea"))
-                                answer = ""
-                            if answer and isinstance(answer, str) and len(answer) > 0:
-                                print_lg(f'AI Answered received for question "{label_org}" \nhere is answer: "{answer}"')
-                            else:
-                                randomly_answered_questions.add((label_org, "textarea"))
-                                answer = ""
-                        except Exception as e:
-                            print_lg("Failed to get AI answer!", e)
-                            randomly_answered_questions.add((label_org, "textarea"))
-                            answer = ""
-                    else:
-                        randomly_answered_questions.add((label_org, "textarea"))
+                    answer = resolve_unknown_question_with_ai(
+                        question=label_org,
+                        question_type="textarea",
+                        job_description=job_description,
+                    )
             text_area.clear()
             text_area.send_keys(answer)
             if do_actions:
@@ -1075,9 +1312,15 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     except ElementClickInterceptedException: break    # Happens when it tries to click Next button in About Company photos section
                                     buffer(click_gap)
 
-                            except NoSuchElementException: errored = "nose"
+                            except UnresolvedApplicationQuestion as unresolved_error:
+                                errored = "unresolved"
+                            except NoSuchElementException:
+                                errored = "nose"
                             finally:
-                                if questions_list and errored != "stuck": 
+                                if errored == "unresolved":
+                                    raise unresolved_error
+
+                                if questions_list and errored != "stuck":
                                     print_lg("Answered the following questions...", questions_list)
                                     print("\n\n" + "\n".join(str(question) for question in questions_list) + "\n\n")
                                 wait_span_click(driver, "Review", 1, scrollTop=True)
@@ -1101,11 +1344,54 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     if errored == "nose": raise Exception("Failed to click Submit application 😑")
 
 
+                        except UnresolvedApplicationQuestion as e:
+                            print_lg(
+                                f'Skipping "{title} | {company}" because '
+                                f'an application question could not be '
+                                f'answered safely: {e}'
+                            )
+
+                            failed_job(
+                                job_id,
+                                job_link,
+                                resume,
+                                date_listed,
+                                "Unresolved application question",
+                                e,
+                                application_link,
+                                screenshot_name,
+                            )
+
+                            rejected_jobs.add(job_id)
+                            skip_count += 1
+
+                            try:
+                                discard_job()
+                            except Exception as discard_error:
+                                print_lg(
+                                    "Failed to discard unresolved "
+                                    "application cleanly!",
+                                    discard_error,
+                                )
+
+                            continue
+
                         except Exception as e:
                             print_lg("Failed to Easy apply!")
-                            # print_lg(e)
-                            critical_error_log("Somewhere in Easy Apply process",e)
-                            failed_job(job_id, job_link, resume, date_listed, "Problem in Easy Applying", e, application_link, screenshot_name)
+                            critical_error_log(
+                                "Somewhere in Easy Apply process",
+                                e,
+                            )
+                            failed_job(
+                                job_id,
+                                job_link,
+                                resume,
+                                date_listed,
+                                "Problem in Easy Applying",
+                                e,
+                                application_link,
+                                screenshot_name,
+                            )
                             failed_count += 1
                             discard_job()
                             continue
